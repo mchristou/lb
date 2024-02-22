@@ -1,14 +1,17 @@
 use anyhow::Result;
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
+    main,
     net::{TcpListener, TcpStream},
     sync::Mutex,
 };
 
 mod round_robin;
+mod utils;
 
 use round_robin::RoundRobin;
+use utils::spawn_and_log_error;
 
 const ADDR: &str = "127.0.0.1:8080";
 
@@ -31,7 +34,6 @@ async fn handle_client(mut stream: TcpStream, round_robin: Arc<Mutex<RoundRobin>
     let response = round_robin.lock().await.write(&buf).await?;
 
     stream.write_all(&response).await?;
-
     stream.shutdown().await?;
 
     Ok(())
@@ -51,22 +53,11 @@ async fn run(backends: Vec<String>) -> Result<()> {
     }
 }
 
-#[tokio::main]
+#[main]
 async fn main() -> Result<()> {
     let backend = vec!["127.0.0.1:8081".to_string(), "127.0.0.1:8082".to_string()];
 
     run(backend).await?;
 
     Ok(())
-}
-
-fn spawn_and_log_error<F>(fut: F) -> tokio::task::JoinHandle<()>
-where
-    F: Future<Output = Result<()>> + Send + 'static,
-{
-    tokio::task::spawn(async move {
-        if let Err(e) = fut.await {
-            eprintln!("{e}");
-        }
-    })
 }
