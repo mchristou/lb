@@ -1,9 +1,10 @@
 use anyhow::Result;
-use std::future::Future;
-use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+use std::{future::Future, sync::Arc};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    sync::Mutex,
+};
 
 mod round_robin;
 
@@ -31,10 +32,12 @@ async fn handle_client(mut stream: TcpStream, round_robin: Arc<Mutex<RoundRobin>
 
     stream.write_all(&response).await?;
 
+    stream.shutdown().await?;
+
     Ok(())
 }
 
-async fn run(backends: Vec<TcpStream>) -> Result<()> {
+async fn run(backends: Vec<String>) -> Result<()> {
     let listener = TcpListener::bind(ADDR).await?;
 
     let rr = RoundRobin::new(backends);
@@ -50,7 +53,7 @@ async fn run(backends: Vec<TcpStream>) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let backend = vec![TcpStream::connect("127.0.0.1:8081").await?];
+    let backend = vec!["127.0.0.1:8081".to_string(), "127.0.0.1:8082".to_string()];
 
     run(backend).await?;
 

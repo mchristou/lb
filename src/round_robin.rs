@@ -1,24 +1,18 @@
 use anyhow::Result;
-use std::sync::Arc;
 
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 #[derive(Debug)]
 pub(crate) struct RoundRobin {
-    backends: Vec<Arc<Mutex<TcpStream>>>,
+    backends: Vec<String>,
     current_index: usize,
 }
 
 impl RoundRobin {
-    pub(crate) fn new(backends: Vec<TcpStream>) -> Self {
-        let backends = backends
-            .into_iter()
-            .map(|b| Arc::new(Mutex::new(b)))
-            .collect();
-
+    pub(crate) fn new(backends: Vec<String>) -> Self {
         RoundRobin {
             backends,
             current_index: 0,
@@ -27,21 +21,20 @@ impl RoundRobin {
 
     pub(crate) async fn write(&mut self, bytes: &[u8]) -> Result<Vec<u8>> {
         if let Some(backend) = self.select_backend() {
-            let mut backend = backend.lock().await;
-
-            backend.write_all(bytes).await?;
-            backend.flush().await?;
+            let mut backend_stream = TcpStream::connect(backend.to_string()).await?;
+            backend_stream.write_all(bytes).await?; // Write response data
 
             let mut response = Vec::new();
-            backend.read_to_end(&mut response).await?;
+            backend_stream.read_to_end(&mut response).await?; // Read response from backend
 
+            backend_stream.shutdown().await?;
             Ok(response)
         } else {
             Err(anyhow::anyhow!("There is no available server"))
         }
     }
 
-    fn select_backend(&mut self) -> Option<Arc<Mutex<TcpStream>>> {
+    fn select_backend(&mut self) -> Option<String> {
         if self.backends.is_empty() {
             return None;
         }
