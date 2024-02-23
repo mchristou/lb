@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
 use anyhow::Result;
-
+use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -99,15 +97,14 @@ async fn health_check(server: Arc<Mutex<Server>>) {
             Ok(res) => {
                 if res.status().is_success() {
                     server.lock().await.state = State::Available;
-                    println!("Server {} is healthy", server.lock().await.url);
                 } else {
                     server.lock().await.state = State::Unavailable;
-                    println!("Server {} is unhealthy", server.lock().await.url);
+                    log::error!("Server {} is unhealthy", server.lock().await.url);
                 }
             }
             Err(_) => {
                 server.lock().await.state = State::Unavailable;
-                println!(
+                log::error!(
                     "Error occurred while checking server {}",
                     server.lock().await.url
                 );

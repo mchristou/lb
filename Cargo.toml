@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+simple_logger = "4.3.3"
 tokio = { version = " 1.36.0", features = [
   "net",
   "rt-multi-thread",
@@ -12,4 +13,6 @@ tokio = { version = " 1.36.0", features = [
   "full",
 ] }
 anyhow = "1.0.80"
+argh = "0.1.12"
 reqwest = "0.11.24"
+log = "0.4.20"

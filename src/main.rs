@@ -1,4 +1,6 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use argh::FromArgs;
+use simple_logger::SimpleLogger;
 use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -15,6 +17,14 @@ use utils::spawn_and_log_error;
 
 const ADDR: &str = "127.0.0.1:8080";
 
+#[derive(Debug, FromArgs)]
+/// Load balancer
+struct Args {
+    #[argh(positional)]
+    /// backend socket addresses
+    backend: Vec<String>,
+}
+
 async fn handle_client(mut stream: TcpStream, round_robin: Arc<Mutex<RoundRobin>>) -> Result<()> {
     let mut buf = [0; 1024];
     let mut msg = String::new();
@@ -29,7 +39,7 @@ async fn handle_client(mut stream: TcpStream, round_robin: Arc<Mutex<RoundRobin>
             break;
         }
     }
-    println!("{msg}");
+    log::info!("{msg}");
 
     let response = round_robin.lock().await.write(&buf).await?;
 
@@ -47,7 +57,7 @@ async fn run(backends: Vec<String>) -> Result<()> {
 
     loop {
         let (socket, _) = listener.accept().await?;
-        println!("Received request from {}", socket.peer_addr()?);
+        log::info!("Received request from {}", socket.peer_addr()?);
 
         tokio::spawn(spawn_and_log_error(handle_client(socket, rr.clone())));
     }
@@ -55,9 +65,21 @@ async fn run(backends: Vec<String>) -> Result<()> {
 
 #[main]
 async fn main() -> Result<()> {
-    let backend = vec!["127.0.0.1:8081".to_string(), "127.0.0.1:8082".to_string()];
+    SimpleLogger::new().init()?;
 
-    run(backend).await?;
+    let args: Args = argh::from_env();
+
+    if args.backend.is_empty() {
+        return Err(anyhow!("No input socket addresses provided"));
+    }
+
+    let backends: Vec<_> = args
+        .backend
+        .into_iter()
+        .filter(|addr| utils::validate_socket_addr(addr))
+        .collect();
+
+    run(backends).await?;
 
     Ok(())
 }
